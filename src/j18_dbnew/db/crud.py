@@ -4,17 +4,26 @@ from typing import List
 from . import models
 from ..parsers.history_result import CanonicalRace, CanonicalHorse
 
-def sync_races_to_db(db: Session, canonical_races: List[CanonicalRace], racing_date: str):
+def sync_races_to_db(db: Session, canonical_races: List[CanonicalRace], racing_date: str = None):
     """
     將解析後的 Canonical 賽事資料同步寫入資料庫
     採用「先刪除該日舊資料，再寫入新資料」的策略，以確保資料一致性並支援重複執行 (Idempotent)
+
+    racing_date 参数可选；若为 None，则根据传入的 canonical_races 内实际出现的日期去重后批量处理
     """
     if not canonical_races:
         return 0
 
-    # 1. 刪除該日期已存在的賽事 (由於設定了 cascade="all, delete-orphan"，關聯的馬匹也會一併被刪除)
-    db.query(models.RaceModel).filter(models.RaceModel.racing_date == racing_date).delete()
-    db.commit()
+    # 收集所有实际涉及的日期，确保跨日期批量导入时也能正确去重
+    if racing_date:
+        dates_to_clean = {racing_date}
+    else:
+        dates_to_clean = {r.racing_date for r in canonical_races if r.racing_date}
+
+    # 1. 刪除涉及日期已存在的賽事 (由於設定了 cascade="all, delete-orphan"，關聯的馬匹也會一併被刪除)
+    if dates_to_clean:
+        db.query(models.RaceModel).filter(models.RaceModel.racing_date.in_(list(dates_to_clean))).delete(synchronize_session=False)
+        db.commit()
 
     # 2. 準備寫入新的賽事與馬匹資料
     races_added = 0
@@ -31,7 +40,7 @@ def sync_races_to_db(db: Session, canonical_races: List[CanonicalRace], racing_d
             track=c_race.track,
             ground=c_race.ground
         )
-        
+
         # 建立 SQLAlchemy Horse 物件並加入 Race
         for c_horse in c_race.horses:
             db_horse = models.HorseModel(
@@ -46,12 +55,12 @@ def sync_races_to_db(db: Session, canonical_races: List[CanonicalRace], racing_d
                 pla_probability=c_horse.pla_probability
             )
             db_race.horses.append(db_horse)
-            
+
         # 將 Race 加入 Session
         db.add(db_race)
         races_added += 1
 
     # 3. 提交所有變更
     db.commit()
-    
+
     return races_added
