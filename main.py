@@ -16,15 +16,15 @@ models.Base.metadata.create_all(bind=engine)
 # 初始化 FastAPI 应用
 app = FastAPI(title="J18 DBNEW Query")
 
-# 配置 Jinja2 模板引擎目录
-templates = Jinja2Templates(directory="templates")
+# 配置 Jinja2 模板引擎目录，并显式指定 context 键名，避免旧式写法引发的 TypeError: unhashable type: 'dict' 问题
+templates = Jinja2Templates(directory="templates", context_processors=[])
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """
     渲染首页 UI
     """
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="index.html", context={})
 
 @app.get("/api/query")
 async def query_data(date: str = Query(..., description="赛事日期 YYYY-MM-DD")):
