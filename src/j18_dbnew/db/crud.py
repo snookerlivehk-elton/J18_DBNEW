@@ -38,13 +38,20 @@ def sync_races_to_db(db: Session, canonical_races: List[CanonicalRace], racing_d
             rating=c_race.rating,
             course=c_race.course,
             track=c_race.track,
-            ground=c_race.ground
+            ground=c_race.ground,
+            times=getattr(c_race, "times", None),
+            sectional_times=getattr(c_race, "sectional_times", None),
+            scene_result_payout=getattr(c_race, "scene_result_payout", None),
+            famous_like_count=getattr(c_race, "famous_like_count", None),
+            promote=getattr(c_race, "promote", None),
+            discount4=getattr(c_race, "discount4", None)
         )
 
         # 建立 SQLAlchemy Horse 物件並加入 Race
         for c_horse in c_race.horses:
             db_horse = models.HorseModel(
                 horse_id=c_horse.horse_id,
+                brandNum=getattr(c_horse, "brandNum", ""),
                 horse_name=c_horse.horse_name,
                 horse_no=c_horse.horse_no,
                 finish_order=c_horse.finish_order,
@@ -52,7 +59,19 @@ def sync_races_to_db(db: Session, canonical_races: List[CanonicalRace], racing_d
                 jockey=c_horse.jockey,
                 trainer=c_horse.trainer,
                 win_probability=c_horse.win_probability,
-                pla_probability=c_horse.pla_probability
+                pla_probability=c_horse.pla_probability,
+                sections=getattr(c_horse, "sections", None),
+                barDraw=getattr(c_horse, "barDraw", ""),
+                handicapWeight=getattr(c_horse, "handicapWeight", ""),
+                sceneWeight=getattr(c_horse, "sceneWeight", ""),
+                horseWeight=getattr(c_horse, "horseWeight", ""),
+                lastSixRun=getattr(c_horse, "lastSixRun", ""),
+                runnerRating=getattr(c_horse, "runnerRating", ""),
+                age=getattr(c_horse, "age", ""),
+                sex=getattr(c_horse, "sex", ""),
+                gear=getattr(c_horse, "gear", ""),
+                importType=getattr(c_horse, "importType", ""),
+                scratched=getattr(c_horse, "scratched", False)
             )
             db_race.horses.append(db_horse)
 

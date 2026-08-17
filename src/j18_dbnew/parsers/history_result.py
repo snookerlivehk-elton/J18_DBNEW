@@ -10,6 +10,7 @@ class CanonicalHorse(BaseModel):
     racing_date: str = Field(description="赛事日期 (YYYY-MM-DD)")
     race_num: int = Field(description="场次号")
     horse_id: str = Field(description="马匹ID")
+    brandNum: Optional[str] = Field(None, description="烙号")
     horse_name: str = Field(description="马匹名称")
     horse_no: str = Field(description="马号")
     finish_order: str = Field(description="名次")
@@ -18,18 +19,41 @@ class CanonicalHorse(BaseModel):
     trainer: str = Field(description="练马师")
     win_probability: Optional[float] = Field(None, description="独赢赔率")
     pla_probability: Optional[float] = Field(None, description="位置赔率")
+    sections: Optional[Dict[str, Any]] = Field(None, description="段速信息 (解析后的 Dict)")
+    
+    # 新增马匹细节栏位
+    barDraw: Optional[str] = Field(None, description="档位")
+    handicapWeight: Optional[str] = Field(None, description="负磅")
+    sceneWeight: Optional[str] = Field(None, description="排位体重")
+    horseWeight: Optional[str] = Field(None, description="体重增减")
+    lastSixRun: Optional[str] = Field(None, description="近六次赛绩")
+    runnerRating: Optional[str] = Field(None, description="马匹评分")
+    age: Optional[str] = Field(None, description="年龄")
+    sex: Optional[str] = Field(None, description="性别")
+    gear: Optional[str] = Field(None, description="配备")
+    importType: Optional[str] = Field(None, description="进口类别")
+    scratched: bool = Field(False, description="是否退出")
 
 class CanonicalRace(BaseModel):
     """赛事场次实体"""
     racing_date: str = Field(description="赛事日期 (YYYY-MM-DD)")
     race_num: int = Field(description="场次号")
     title: str = Field(description="赛事标题")
+    race_name: str = Field(description="赛事名称")
     race_class: str = Field(description="班次")
     distance: str = Field(description="途程")
     rating: str = Field(description="评分区间")
     course: str = Field(description="场地")
     track: str = Field(description="赛道")
     ground: str = Field(description="场地状况")
+    
+    # 新增赛事 JSON 栏位
+    times: Optional[List[str]] = Field(None, description="赛事总分段时间")
+    sectional_times: Optional[List[Any]] = Field(None, description="赛事每段明细时间与 split")
+    scene_result_payout: Optional[Dict[str, Any]] = Field(None, description="派彩结果")
+    famous_like_count: Optional[Dict[str, Any]] = Field(None, description="名家按赞与推介数据")
+    promote: Optional[Dict[str, Any]] = Field(None, description="走势推介资料")
+    discount4: Optional[Dict[str, Any]] = Field(None, description="赔率折让与异动分析")
     
     horses: List[CanonicalHorse] = Field(default_factory=list, description="该场次的马匹成绩")
 
@@ -92,12 +116,19 @@ class HistoryResultParser:
                 racing_date=racing_date,
                 race_num=race_num,
                 title=detail.get("title", ""),
+                race_name=detail.get("race_name", ""),
                 race_class=detail.get("class", ""),
                 distance=detail.get("distance", ""),
                 rating=detail.get("rating", ""),
                 course=detail.get("course", ""),
                 track=detail.get("track", ""),
-                ground=detail.get("ground", "")
+                ground=detail.get("ground", ""),
+                times=detail.get("times", []),
+                sectional_times=detail.get("sectional_times", []),
+                scene_result_payout=race_obj.get("scene_result_payout", {}),
+                famous_like_count=race_obj.get("famous_like_count", {}),
+                promote=race_obj.get("promote", {}),
+                discount4=race_obj.get("discount4", {})
             )
 
             horses_list = detail.get("horses", [])
@@ -119,10 +150,13 @@ class HistoryResultParser:
                 except ValueError:
                     pla_prob = None
 
+                sections_data = h.get("sections")
+
                 canonical_horse = CanonicalHorse(
                     racing_date=racing_date,
                     race_num=race_num,
                     horse_id=str(h.get("horse_id", "")),
+                    brandNum=str(h.get("brandNum", "")),
                     horse_name=str(h.get("horse_name", "")),
                     horse_no=str(h.get("horse_no", "")),
                     finish_order=str(h.get("finish_order", "")),
@@ -130,7 +164,19 @@ class HistoryResultParser:
                     jockey=str(h.get("jockeyName", "")),
                     trainer=str(h.get("trainerName", "")),
                     win_probability=win_prob,
-                    pla_probability=pla_prob
+                    pla_probability=pla_prob,
+                    sections=sections_data,
+                    barDraw=str(h.get("barDraw", "")),
+                    handicapWeight=str(h.get("handicapWeight", "")),
+                    sceneWeight=str(h.get("sceneWeight", "")),
+                    horseWeight=str(h.get("horseWeight", "")),
+                    lastSixRun=str(h.get("lastSixRun", "")),
+                    runnerRating=str(h.get("runnerRating", "")),
+                    age=str(h.get("age", "")),
+                    sex=str(h.get("sex", "")),
+                    gear=str(h.get("gear", "")),
+                    importType=str(h.get("importType", "")),
+                    scratched=bool(h.get("scratched", False))
                 )
                 canonical_race.horses.append(canonical_horse)
 

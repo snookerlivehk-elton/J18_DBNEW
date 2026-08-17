@@ -278,8 +278,13 @@
                             <div class="horse-item">
                                 <div class="horse-rank ${rankClass}">${horse.finish_order}</div>
                                 <div class="horse-info">
-                                    <p class="horse-name">${horse.horse_no}. ${horse.horse_name}</p>
-                                    <p class="horse-detail">騎師: ${horse.jockey} | 練馬師: ${horse.trainer}</p>
+                                    <p class="horse-name">${horse.horse_no}. ${horse.horse_name} <span style="font-size:12px;color:#8E8E93">(${horse.brandNum || '-'})</span></p>
+                                    <p class="horse-detail">
+                                        騎師: ${horse.jockey} | 練馬師: ${horse.trainer} | 完成時間: ${horse.final_time || '-'}<br>
+                                        檔位: ${horse.barDraw || '-'} | 負磅: ${horse.handicapWeight || '-'} | 體重: ${horse.sceneWeight || '-'} (${horse.horseWeight || '-'})<br>
+                                        配備: ${horse.gear || '-'} | 評分: ${horse.runnerRating || '-'} | 近六場: ${horse.lastSixRun || '-'}
+                                    </p>
+                                    ${sectionsHtml}
                                 </div>
                                 <div class="horse-odds">
                                     <div class="odds-win">獨贏 ${horse.win_probability || '-'}</div>
