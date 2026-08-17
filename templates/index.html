@@ -262,18 +262,35 @@
                 // 組合 HTML 字串渲染賽事卡片
                 let html = '';
                 for (const race of races) {
-                    // 解析賽事派彩與分段時間
+                    // 解析賽事派彩與分段時間 (完整顯示所有已提取 JSON)
                     let payoutHtml = '';
                     let timesHtml = '';
+                    let extraDataHtml = [];
                     try {
                         const payout = typeof race.scene_result_payout === 'string' ? JSON.parse(race.scene_result_payout) : race.scene_result_payout;
                         if (payout && Object.keys(payout).length > 0) {
-                            payoutHtml = `<div style="font-size: 12px; color: #34C759; margin-top: 8px;">派彩資料已入庫</div>`;
+                            extraDataHtml.push(`<span style="color:#34C759;">✅ 派彩結果(scene_result_payout)</span>`);
                         }
                         
                         const times = typeof race.times === 'string' ? JSON.parse(race.times) : race.times;
                         if (times && times.length > 0) {
                             timesHtml = `<div style="font-size: 12px; color: #8E8E93; margin-top: 4px;">總分段時間: ${times.join(' | ')}</div>`;
+                        }
+
+                        const sectTimes = typeof race.sectional_times === 'string' ? JSON.parse(race.sectional_times) : race.sectional_times;
+                        if (sectTimes && Object.keys(sectTimes).length > 0) extraDataHtml.push(`<span style="color:#34C759;">✅ 明細分段時間(sectional_times)</span>`);
+
+                        const likeCount = typeof race.famous_like_count === 'string' ? JSON.parse(race.famous_like_count) : race.famous_like_count;
+                        if (likeCount && Object.keys(likeCount).length > 0) extraDataHtml.push(`<span style="color:#34C759;">✅ 名家按讚(famous_like_count)</span>`);
+
+                        const promote = typeof race.promote === 'string' ? JSON.parse(race.promote) : race.promote;
+                        if (promote && Object.keys(promote).length > 0) extraDataHtml.push(`<span style="color:#34C759;">✅ 走勢推介(promote)</span>`);
+
+                        const disc = typeof race.discount4 === 'string' ? JSON.parse(race.discount4) : race.discount4;
+                        if (disc && Object.keys(disc).length > 0) extraDataHtml.push(`<span style="color:#34C759;">✅ 賠率折讓(discount4)</span>`);
+
+                        if (extraDataHtml.length > 0) {
+                            payoutHtml = `<div style="font-size: 11px; margin-top: 10px; display: flex; flex-wrap: wrap; gap: 12px; padding: 8px; background: #F2F2F7; border-radius: 8px;">${extraDataHtml.join('')}</div>`;
                         }
                     } catch(e) { console.error('Parse race json fields failed', e); }
 
@@ -292,7 +309,7 @@
                     for (const horse of race.horses) {
                         const rankClass = horse.finish_order === '1' ? 'rank-1' : '';
                         
-                        // 解析 sections 資料
+                        // 解析 sections 資料 (完整顯示排名+時間+距離)
                         let sectionsHtml = '';
                         if (horse.sections) {
                             try {
@@ -300,12 +317,15 @@
                                 const stages = [];
                                 for (let i = 1; i <= 6; i++) {
                                     const stage = sections[`stage_${i}`];
-                                    if (stage && stage.position) {
-                                        stages.push(`<span title="分段時間: ${stage.sectional_time || '-'}">第${i}段排名: <b>${stage.position}</b></span>`);
+                                    if (stage) {
+                                        const timeStr = stage.sectional_time ? `${stage.sectional_time}s` : '-';
+                                        const distStr = stage.distance ? `距${stage.distance}` : '';
+                                        const posStr = stage.position ? `排名${stage.position}` : '-';
+                                        stages.push(`<span><b>第${i}段:</b> ${posStr} / ${timeStr} / ${distStr}</span>`);
                                     }
                                 }
                                 if (stages.length > 0) {
-                                    sectionsHtml = `<div style="font-size: 12px; color: #8E8E93; margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap;">${stages.join(' | ')}</div>`;
+                                    sectionsHtml = `<div style="font-size: 12px; color: #007AFF; margin-top: 8px; padding: 8px; background-color: #F2F2F7; border-radius: 8px; display: flex; flex-direction: column; gap: 4px;">${stages.join('')}</div>`;
                                 }
                             } catch(e) {
                                 console.error('Parse sections failed', e);
@@ -320,7 +340,9 @@
                                     <p class="horse-detail">
                                         騎師: ${horse.jockey} | 練馬師: ${horse.trainer} | 完成時間: ${horse.final_time || '-'}<br>
                                         檔位: ${horse.barDraw || '-'} | 負磅: ${horse.handicapWeight || '-'} | 體重: ${horse.sceneWeight || '-'} (${horse.horseWeight || '-'})<br>
-                                        配備: ${horse.gear || '-'} | 評分: ${horse.runnerRating || '-'} | 近六場: ${horse.lastSixRun || '-'}
+                                        配備: ${horse.gear || '-'} | 評分: ${horse.runnerRating || '-'} | 近六場: ${horse.lastSixRun || '-'}<br>
+                                        年齡/性別: ${horse.age || '-'}/${horse.sex || '-'} | 進口類別: ${horse.importType || '-'}
+                                        ${horse.scratched ? '<br><span style="color:#FF3B30; font-weight:bold">⚠️ 此馬匹已退出 (Scratched)</span>' : ''}
                                     </p>
                                     ${sectionsHtml}
                                 </div>
