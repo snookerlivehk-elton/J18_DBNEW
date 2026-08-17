@@ -6,7 +6,7 @@ SpeedPro 自動爬取 Cron Job 腳本 (cron_speedpro_fetch.py)
     自動抓取「未來 2 天內有賽事」的 SpeedPro 資料，寫入 kv_store_v2 表格。
 
 注意（與 hkjc_analytics 同步）：
-    SpeedPro 數據只會在「開賽前 24 小時內」才會更新，因此本腳本會：
+    SpeedPro 數據只會在「開賽前 36 小時內」才會更新，因此本腳本會：
       1. 先查詢 races_v2 中「今天 + 明天」是否有賽事。
       2. 針對每個候選日期，判斷「現在 HK 時間是否 >= 比賽日 00:00 - 36 小時」
          （也就是大約在比賽日前一天中午之後才開始嘗試爬，避免爬到空/舊資料）。
@@ -41,6 +41,8 @@ SpeedPro 自動爬取 Cron Job 腳本 (cron_speedpro_fetch.py)
     - SPEEDPRO_LOOKAHEAD_DAYS       ：(選填) 往前看多幾天找目標賽事，預設 2 (今天 + 明天)
     - RACE_NOS                      ：(選填) 只爬指定場次，例如 "1,3,5"
 """
+
+from __future__ import annotations
 
 import os
 import sys
