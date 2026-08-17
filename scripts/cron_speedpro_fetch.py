@@ -48,7 +48,7 @@ import json
 import hashlib
 import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 
 # 將 src 目錄加入 Python 路徑
 root_path = str(Path(__file__).resolve().parent.parent)
