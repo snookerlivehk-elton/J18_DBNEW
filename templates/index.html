@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>賽事查詢</title>
+    <style>
+        /* 基礎重置與 iOS 風格背景 */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #F2F2F7;
+            margin: 0;
+            padding: 16px;
+            color: #000;
+        }
+        /* 主容器：限制最大寬度以適應不同螢幕 */
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        /* 標題 */
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 24px;
+        }
+        /* 搜尋卡片 (大圓角與陰影) */
+        .search-card {
+            background: #FFFFFF;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        /* 日期輸入框 */
+        input[type="date"] {
+            flex: 1;
+            border: none;
+            background: #F2F2F7;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 16px;
+            outline: none;
+        }
+        /* 查詢按鈕 (iOS 藍色) */
+        button {
+            background: #007AFF;
+            color: #FFF;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:active {
+            opacity: 0.7;
+        }
+        /* 賽事卡片 */
+        .race-card {
+            background: #FFFFFF;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .race-header {
+            border-bottom: 1px solid #E5E5EA;
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+        }
+        .race-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #000;
+            margin: 0 0 4px 0;
+        }
+        .race-meta {
+            font-size: 14px;
+            color: #8E8E93;
+        }
+        /* 馬匹列表 */
+        .horse-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .horse-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: #F2F2F7;
+            border-radius: 12px;
+        }
+        .horse-rank {
+            width: 32px;
+            height: 32px;
+            background: #FFFFFF;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin-right: 12px;
+            color: #000;
+            flex-shrink: 0;
+        }
+        /* 第一名以紅色突出 (iOS 紅色) */
+        .rank-1 { color: #FF3B30; }
+        
+        .horse-info {
+            flex: 1;
+            min-width: 0; /* 防止文字溢出 */
+        }
+        .horse-name {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 2px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .horse-detail {
+            font-size: 13px;
+            color: #8E8E93;
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .horse-odds {
+            text-align: right;
+            flex-shrink: 0;
+            margin-left: 12px;
+        }
+        .odds-win {
+            font-size: 15px;
+            font-weight: 600;
+            color: #007AFF;
+        }
+        .odds-pla {
+            font-size: 13px;
+            color: #8E8E93;
+        }
+        /* 提示訊息狀態 */
+        .error {
+            color: #FF3B30;
+            text-align: center;
+            padding: 20px;
+        }
+        .loading {
+            text-align: center;
+            color: #8E8E93;
+            padding: 20px;
+        }
+        
+        /* 手機端自適應微調 */
+        @media (max-width: 480px) {
+            .search-card {
+                flex-direction: column;
+            }
+            button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>賽事查詢</h1>
+        <div class="search-card">
+            <input type="date" id="dateInput" value="2026-07-15">
+            <button onclick="fetchData()">查詢</button>
+        </div>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // 獲取賽事資料並渲染到畫面上
+        async function fetchData() {
+            const date = document.getElementById('dateInput').value;
+            const resultsDiv = document.getElementById('results');
+            
+            if (!date) {
+                resultsDiv.innerHTML = '<div class="error">請選擇日期</div>';
+                return;
+            }
+
+            resultsDiv.innerHTML = '<div class="loading">載入中...</div>';
+
+            try {
+                // 呼叫後端 API
+                const response = await fetch(`/api/query?date=${date}`);
+                const json = await response.json();
+
+                if (json.code !== 0) {
+                    resultsDiv.innerHTML = `<div class="error">查詢失敗：${json.msg}</div>`;
+                    return;
+                }
+
+                const races = json.data;
+                if (races.length === 0) {
+                    resultsDiv.innerHTML = '<div class="loading">該日無賽事資料</div>';
+                    return;
+                }
+
+                // 組合 HTML 字串渲染賽事卡片
+                let html = '';
+                for (const race of races) {
+                    html += `
+                        <div class="race-card">
+                            <div class="race-header">
+                                <h2 class="race-title">第 ${race.race_num} 場: ${race.title}</h2>
+                                <div class="race-meta">${race.race_class} | ${race.distance} | ${race.course} ${race.track} | ${race.ground}</div>
+                            </div>
+                            <div class="horse-list">
+                    `;
+                    
+                    // 遍歷該場次的所有馬匹
+                    for (const horse of race.horses) {
+                        const rankClass = horse.finish_order === '1' ? 'rank-1' : '';
+                        html += `
+                            <div class="horse-item">
+                                <div class="horse-rank ${rankClass}">${horse.finish_order}</div>
+                                <div class="horse-info">
+                                    <p class="horse-name">${horse.horse_no}. ${horse.horse_name}</p>
+                                    <p class="horse-detail">騎師: ${horse.jockey} | 練馬師: ${horse.trainer}</p>
+                                </div>
+                                <div class="horse-odds">
+                                    <div class="odds-win">獨贏 ${horse.win_probability || '-'}</div>
+                                    <div class="odds-pla">位置 ${horse.pla_probability || '-'}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                }
+                resultsDiv.innerHTML = html;
+
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">網路錯誤：${error.message}</div>`;
+            }
+        }
+        
+        // 頁面載入時自動查詢預設日期
+        window.onload = () => {
+            fetchData();
+        };
+    </script>
+</body>
+</html>
