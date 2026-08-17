@@ -59,6 +59,10 @@
         button:active {
             opacity: 0.7;
         }
+        /* 同步按鈕 (iOS 綠色) */
+        .btn-sync {
+            background: #34C759;
+        }
         /* 賽事卡片 */
         .race-card {
             background: #FFFFFF;
@@ -170,10 +174,11 @@
 </head>
 <body>
     <div class="container">
-        <h1>賽事查詢</h1>
+        <h1>賽事查詢與同步</h1>
         <div class="search-card">
             <input type="date" id="dateInput" value="2026-07-15">
-            <button onclick="fetchData()">查詢</button>
+            <button onclick="fetchData()">查詢 (即時API)</button>
+            <button class="btn-sync" onclick="syncData()">同步至資料庫</button>
         </div>
         <div id="results"></div>
     </div>
@@ -244,6 +249,32 @@
                 }
                 resultsDiv.innerHTML = html;
 
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">網路錯誤：${error.message}</div>`;
+            }
+        }
+        
+        // 呼叫後端 API 將資料同步至資料庫
+        async function syncData() {
+            const date = document.getElementById('dateInput').value;
+            const resultsDiv = document.getElementById('results');
+            
+            if (!date) {
+                alert('請先選擇日期');
+                return;
+            }
+
+            resultsDiv.innerHTML = '<div class="loading">正在將資料寫入資料庫，請稍候...</div>';
+
+            try {
+                const response = await fetch(`/api/sync?date=${date}`);
+                const json = await response.json();
+
+                if (json.code !== 0) {
+                    resultsDiv.innerHTML = `<div class="error">同步失敗：${json.msg}</div>`;
+                } else {
+                    resultsDiv.innerHTML = `<div class="loading" style="color: #34C759; font-weight: bold;">${json.msg}</div>`;
+                }
             } catch (error) {
                 resultsDiv.innerHTML = `<div class="error">網路錯誤：${error.message}</div>`;
             }
