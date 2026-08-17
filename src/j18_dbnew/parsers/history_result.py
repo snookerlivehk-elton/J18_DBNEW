@@ -33,6 +33,7 @@ class CanonicalHorse(BaseModel):
     gear: Optional[str] = Field(None, description="配备")
     importType: Optional[str] = Field(None, description="进口类别")
     scratched: bool = Field(False, description="是否退出")
+    raw_extra: Optional[Dict[str, Any]] = Field(None, description="未来扩展字段：沿途走位描述/赛事报告等所有新增的非结构化资料")
 
 class CanonicalRace(BaseModel):
     """赛事场次实体"""
@@ -47,13 +48,14 @@ class CanonicalRace(BaseModel):
     track: str = Field(description="赛道")
     ground: str = Field(description="场地状况")
     
-    # 新增赛事 JSON 栏位
-    times: Optional[List[str]] = Field(None, description="赛事总分段时间")
+    # 新增賽事 JSON 欄位
+    times: Optional[List[str]] = Field(None, description="賽事总分段时间")
     sectional_times: Optional[List[Any]] = Field(None, description="赛事每段明细时间与 split")
     scene_result_payout: Optional[Dict[str, Any]] = Field(None, description="派彩结果")
     famous_like_count: Optional[Dict[str, Any]] = Field(None, description="名家按赞与推介数据")
     promote: Optional[Dict[str, Any]] = Field(None, description="走势推介资料")
     discount4: Optional[Dict[str, Any]] = Field(None, description="赔率折让与异动分析")
+    raw_extra: Optional[Dict[str, Any]] = Field(None, description="未来扩展字段：其他所有未结构化的赛事数据")
     
     horses: List[CanonicalHorse] = Field(default_factory=list, description="该场次的马匹成绩")
 

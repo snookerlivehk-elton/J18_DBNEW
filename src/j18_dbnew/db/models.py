@@ -27,6 +27,7 @@ class RaceModel(Base):
     famous_like_count = Column(JSON, nullable=True)          # 名家按讚與推介數據
     promote = Column(JSON, nullable=True)                    # 走勢推介資料
     discount4 = Column(JSON, nullable=True)                  # 賠率折讓與異動分析
+    raw_extra = Column(JSON, nullable=True)                  # 未來擴展欄位：用於存放任何新增的賽事級資料 (無需改 V3)
 
     # 建立與馬匹的關聯，當賽事被刪除時，關聯的馬匹也會被刪除 (cascade)
     horses = relationship("HorseModel", back_populates="race", cascade="all, delete-orphan")
@@ -70,6 +71,7 @@ class HorseModel(Base):
     gear = Column(String, nullable=True)                     # 配備
     importType = Column(String, nullable=True)               # 進口類別
     scratched = Column(Boolean, nullable=True, default=False)# 是否退出
+    raw_extra = Column(JSON, nullable=True)                  # 未來擴展欄位：用於存放任何新增的馬匹級資料 (沿途走位、賽事報告等，無需改 V3)
 
     # 建立與賽事的關聯
     race = relationship("RaceModel", back_populates="horses")
