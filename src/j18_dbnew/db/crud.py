@@ -102,3 +102,109 @@ def get_sync_status(db: Session) -> Dict[str, Any]:
         "total_horses": total_horses,
         "unique_days_synced": unique_days
     }
+
+
+# ============================================================
+# Key-Value Store 通用操作 (用於 SpeedPro 結果存儲 / 重複核對 / Cron 狀態)
+# ============================================================
+
+def _now_iso() -> str:
+    """取得香港時間 (UTC+8) 現在的 ISO 字串，用於 timestamp 記錄"""
+    import datetime
+    utc_now = datetime.datetime.utcnow()
+    hk_time = utc_now + datetime.timedelta(hours=8)
+    return hk_time.isoformat()
+
+
+def get_kv(db: Session, key: str) -> Optional[models.KVStoreModel]:
+    """
+    根據 key 查詢 KV 紀錄；若不存在返回 None
+    """
+    if not key:
+        return None
+    return db.query(models.KVStoreModel).filter(models.KVStoreModel.key == key).first()
+
+
+def upsert_kv(db: Session, key: str, value: Any, description: str = None) -> models.KVStoreModel:
+    """
+    新增或更新 KV 紀錄 (Idempotent：重複呼叫只會更新 value 與 timestamp)
+    """
+    if not key:
+        raise ValueError("upsert_kv: key 不能為空")
+    now = _now_iso()
+    exist = get_kv(db, key)
+    if exist:
+        exist.value = value
+        exist.updated_at = now
+        if description and not exist.description:
+            exist.description = description
+    else:
+        exist = models.KVStoreModel(
+            key=key,
+            value=value,
+            description=description,
+            created_at=now,
+            updated_at=now
+        )
+        db.add(exist)
+    db.commit()
+    db.refresh(exist)
+    return exist
+
+
+def delete_kv(db: Session, key: str) -> bool:
+    """
+    刪除指定 key 的 KV 紀錄；成功返回 True，不存在返回 False
+    """
+    if not key:
+        return False
+    exist = get_kv(db, key)
+    if not exist:
+        return False
+    db.delete(exist)
+    db.commit()
+    return True
+
+
+def list_race_nos_by_date(db: Session, racing_date: str) -> List[int]:
+    """
+    查詢指定日期 (YYYY-MM-DD) 在 races_v2 中所有已存在的賽事場次編號
+    若當天沒有任何賽事，返回 [1..9] 的預設範圍（保守嘗試）
+    """
+    if not racing_date:
+        return list(range(1, 10))
+    rows = (
+        db.query(models.RaceModel.race_num)
+        .filter(models.RaceModel.racing_date == racing_date)
+        .order_by(models.RaceModel.race_num.asc())
+        .all()
+    )
+    out = []
+    for (rn,) in rows:
+        try:
+            rn_int = int(rn or 0)
+            if rn_int > 0:
+                out.append(rn_int)
+        except Exception:
+            continue
+    return out if out else list(range(1, 10))
+
+
+def expected_horse_count(db: Session, racing_date: str, race_no: int) -> Optional[int]:
+    """
+    查詢指定日期+場次預期有多少匹馬（用於校驗 SpeedPro 爬取結果的完整性）
+    若查不到該場次，返回 None
+    """
+    try:
+        race = (
+            db.query(models.RaceModel.id)
+            .filter(models.RaceModel.racing_date == racing_date)
+            .filter(models.RaceModel.race_num == int(race_no))
+            .first()
+        )
+        if not race:
+            return None
+        cnt = db.query(models.HorseModel.id).filter(models.HorseModel.race_id == int(race[0])).count()
+        return int(cnt) if cnt else None
+    except Exception:
+        return None

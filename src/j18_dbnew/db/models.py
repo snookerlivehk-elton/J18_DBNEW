@@ -75,3 +75,27 @@ class HorseModel(Base):
 
     # 建立與賽事的關聯
     race = relationship("RaceModel", back_populates="horses")
+
+
+class KVStoreModel(Base):
+    """
+    通用鍵值對快取表 (Key-Value Store)
+
+    用途：
+      1. 存放 SpeedPro / 其他外部爬取結果，避免重複爬取（去重核對）
+      2. 存放 Cron Job 執行狀態（重試次數、下次重試時間、完成旗標等）
+      3. 存放分散式鎖，防止同一個 Cron Job 重複執行
+      4. 任何未來需要靈活鍵值存儲的資料，一律放這裡，避免不斷新增 V3/V4 表
+    """
+    __tablename__ = "kv_store_v2"
+
+    id = Column(Integer, primary_key=True, index=True)
+    # 鍵值唯一索引，例如 "speedpro_energy:2026-08-18:1" (日期:場次)
+    key = Column(String, unique=True, index=True, nullable=False)
+    # 值（可以是字串、JSON 物件、數字），統一用 JSON 存儲，靈活擴展
+    value = Column(JSON, nullable=True)
+    # 可選描述，方便後續排查這個 key 的用途
+    description = Column(String, nullable=True)
+    # 建立時間 / 更新時間，自動維護
+    created_at = Column(String, nullable=False)
+    updated_at = Column(String, nullable=False)
