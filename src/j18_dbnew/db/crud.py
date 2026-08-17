@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
-from typing import List
+from sqlalchemy import func
+from typing import List, Dict, Any, Optional
 
 from . import models
 from ..parsers.history_result import CanonicalRace, CanonicalHorse
@@ -83,3 +84,21 @@ def sync_races_to_db(db: Session, canonical_races: List[CanonicalRace], racing_d
     db.commit()
 
     return races_added
+
+def get_sync_status(db: Session) -> Dict[str, Any]:
+    """
+    查詢資料庫中的同步狀態 (最早/最晚同步日期、總賽事數、總馬匹紀錄數)
+    """
+    min_date = db.query(func.min(models.RaceModel.racing_date)).scalar()
+    max_date = db.query(func.max(models.RaceModel.racing_date)).scalar()
+    total_races = db.query(func.count(models.RaceModel.id)).scalar() or 0
+    total_horses = db.query(func.count(models.HorseModel.id)).scalar() or 0
+    unique_days = db.query(func.count(func.distinct(models.RaceModel.racing_date))).scalar() or 0
+
+    return {
+        "earliest_date": min_date,
+        "latest_date": max_date,
+        "total_races": total_races,
+        "total_horses": total_horses,
+        "unique_days_synced": unique_days
+    }

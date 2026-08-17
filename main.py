@@ -176,3 +176,11 @@ if __name__ == "__main__":
     import uvicorn
     # 供本地直接执行使用
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+@app.get("/api/sync_status")
+async def get_sync_status(db: Session = Depends(get_db)):
+    """
+    查询数据库的同步状态：已同步的最早/最晚日期、赛事总数、马匹纪录总数
+    """
+    status = crud.get_sync_status(db)
+    return {"code": 0, "msg": "success", "data": status}

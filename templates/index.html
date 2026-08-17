@@ -208,6 +208,12 @@
     <div class="container">
         <h1>賽事查詢與同步</h1>
         
+        <!-- 同步狀態顯示卡片 (最上方) -->
+        <div class="sync-status-card" style="background: #FFFFFF; padding: 16px 20px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.05);">
+            <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #000;">📊 資料庫同步狀態</h3>
+            <div id="syncStatusContent" style="color: #8E8E93; font-size: 14px;">載入中...</div>
+        </div>
+
         <!-- 單日查詢與同步 -->
         <div class="search-card">
             <input type="date" id="dateInput" value="2026-07-15">
@@ -231,6 +237,49 @@
     </div>
 
     <script>
+        // 頁面加載時立即獲取同步狀態
+        window.onload = function() {
+            loadSyncStatus();
+            
+            // 自動帶入今天日期作為結束日期
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('endDate').value = today;
+        }
+
+        // 取得同步狀態並渲染
+        async function loadSyncStatus() {
+            const statusDiv = document.getElementById('syncStatusContent');
+            try {
+                const resp = await fetch('/api/sync_status');
+                const json = await resp.json();
+                if (json.code === 0) {
+                    const s = json.data;
+                    const earliest = s.earliest_date || '<span style="color:#FF9500">尚未同步</span>';
+                    const latest = s.latest_date || '<span style="color:#FF9500">尚未同步</span>';
+                    statusDiv.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <span style="color: #8E8E93;">已同步起迄：</span>
+                                <span style="font-weight: 600; color: #000;">${earliest}</span>
+                                <span style="color: #8E8E93;"> 至 </span>
+                                <span style="font-weight: 600; color: #000;">${latest}</span>
+                            </div>
+                            <div>
+                                <span style="color: #007AFF;">共 ${s.unique_days_synced} 個比賽日</span> | 
+                                <span style="color: #34C759;">${s.total_races} 場賽事</span> | 
+                                <span style="color: #FF9500;">${s.total_horses} 匹馬紀錄</span>
+                            </div>
+                        </div>
+                        <div style="font-size: 12px; margin-top: 8px; color: #8E8E93;">💡 建議：批量同步前請先確認上方起迄日期，避免重複同步。</div>
+                    `;
+                } else {
+                    statusDiv.innerHTML = `<span style="color:#FF3B30">取得狀態失敗</span>`;
+                }
+            } catch (e) {
+                statusDiv.innerHTML = `<span style="color:#FF3B30">無法連線伺服器取得狀態</span>`;
+            }
+        }
+
         // 獲取賽事資料並渲染到畫面上
         async function fetchData() {
             const date = document.getElementById('dateInput').value;
