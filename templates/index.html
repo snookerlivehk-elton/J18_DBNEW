@@ -262,11 +262,28 @@
                 // 組合 HTML 字串渲染賽事卡片
                 let html = '';
                 for (const race of races) {
+                    // 解析賽事派彩與分段時間
+                    let payoutHtml = '';
+                    let timesHtml = '';
+                    try {
+                        const payout = typeof race.scene_result_payout === 'string' ? JSON.parse(race.scene_result_payout) : race.scene_result_payout;
+                        if (payout && Object.keys(payout).length > 0) {
+                            payoutHtml = `<div style="font-size: 12px; color: #34C759; margin-top: 8px;">派彩資料已入庫</div>`;
+                        }
+                        
+                        const times = typeof race.times === 'string' ? JSON.parse(race.times) : race.times;
+                        if (times && times.length > 0) {
+                            timesHtml = `<div style="font-size: 12px; color: #8E8E93; margin-top: 4px;">總分段時間: ${times.join(' | ')}</div>`;
+                        }
+                    } catch(e) { console.error('Parse race json fields failed', e); }
+
                     html += `
                         <div class="race-card">
                             <div class="race-header">
-                                <h2 class="race-title">第 ${race.race_num} 場: ${race.title}</h2>
+                                <h2 class="race-title">第 ${race.race_num} 場: ${race.race_name || race.title}</h2>
                                 <div class="race-meta">${race.race_class} | ${race.distance} | ${race.course} ${race.track} | ${race.ground}</div>
+                                ${timesHtml}
+                                ${payoutHtml}
                             </div>
                             <div class="horse-list">
                     `;
