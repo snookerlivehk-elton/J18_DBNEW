@@ -161,10 +161,42 @@
             padding: 20px;
         }
         
+        /* 批量同步卡片 */
+        .batch-sync-card {
+            background: #FFFFFF;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            margin-bottom: 24px;
+        }
+        .batch-sync-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0 0 12px 0;
+            color: #000;
+        }
+        .batch-sync-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .date-divider {
+            color: #8E8E93;
+            font-weight: 600;
+        }
+        /* 按鈕紫色 (批量) */
+        .btn-purple {
+            background: #AF52DE;
+        }
+        
         /* 手機端自適應微調 */
         @media (max-width: 480px) {
-            .search-card {
+            .search-card, .batch-sync-row {
                 flex-direction: column;
+                align-items: stretch;
+            }
+            .date-divider {
+                text-align: center;
             }
             button {
                 width: 100%;
@@ -175,11 +207,26 @@
 <body>
     <div class="container">
         <h1>賽事查詢與同步</h1>
+        
+        <!-- 單日查詢與同步 -->
         <div class="search-card">
             <input type="date" id="dateInput" value="2026-07-15">
             <button onclick="fetchData()">查詢 (即時API)</button>
-            <button class="btn-sync" onclick="syncData()">同步至資料庫</button>
+            <button class="btn-sync" onclick="syncData()">單日同步至資料庫</button>
         </div>
+
+        <!-- 批量區間同步 -->
+        <div class="batch-sync-card">
+            <h2 class="batch-sync-title">指定期間段的數據同步至資料庫</h2>
+            <div class="batch-sync-row">
+                <input type="date" id="startDate" value="2025-09-07">
+                <span class="date-divider">至</span>
+                <input type="date" id="endDate">
+                <button class="btn-purple" onclick="backfillData()">開始批量同步</button>
+            </div>
+            <div id="batchResults" style="margin-top: 12px; font-size: 14px;"></div>
+        </div>
+
         <div id="results"></div>
     </div>
 
@@ -282,8 +329,48 @@
         
         // 頁面載入時自動查詢預設日期
         window.onload = () => {
+            // 預設結束日期為今天
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('endDate').value = today;
+            
             fetchData();
         };
+
+        // 呼叫後端 API 將區間資料批量同步至資料庫
+        async function backfillData() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const batchResultsDiv = document.getElementById('batchResults');
+            
+            if (!startDate || !endDate) {
+                alert('請選擇起始與結束日期');
+                return;
+            }
+
+            batchResultsDiv.innerHTML = '<span style="color: #8E8E93;">正在執行區間批量同步，範圍較大時可能需要數分鐘，請耐心等候不要關閉視窗...</span>';
+
+            try {
+                const response = await fetch(`/api/backfill?start_date=${startDate}&end_date=${endDate}`);
+                const json = await response.json();
+
+                if (json.code !== 0) {
+                    batchResultsDiv.innerHTML = `<span style="color: #FF3B30;">批量同步完成但有部分錯誤：${json.msg} (詳情請見伺服器 Log)</span>`;
+                } else {
+                    const s = json.data.summary;
+                    batchResultsDiv.innerHTML = `
+                        <span style="color: #AF52DE; font-weight: bold;">
+                            ✅ ${json.msg}<br>
+                            掃描天數: ${s.days_scanned} 天 | 
+                            成功匯入: ${s.days_ok} 天 | 
+                            無賽事跳過: ${s.days_skipped} 天<br>
+                            總計寫入賽事: ${s.races_synced_total} 場
+                        </span>
+                    `;
+                }
+            } catch (error) {
+                batchResultsDiv.innerHTML = `<span style="color: #FF3B30;">網路或超時錯誤：${error.message}</span>`;
+            }
+        }
     </script>
 </body>
 </html>
