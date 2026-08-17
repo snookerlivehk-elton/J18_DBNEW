@@ -76,14 +76,14 @@ LOCK_TTL_MIN = 15  # 鎖 TTL，超過 15 分鐘自動過期（避免崩潰後永
 
 def _get_today_hk_str() -> str:
     """取得香港時間 (UTC+8) 今天日期，格式 YYYY-MM-DD"""
-    utc_now = datetime.datetime.utcnow()
+    utc_now = datetime.datetime.now(datetime.timezone.utc)
     hk_time = utc_now + datetime.timedelta(hours=8)
     return hk_time.strftime("%Y-%m-%d")
 
 
 def _now_hk() -> datetime.datetime:
     """取得現在的香港時間 datetime (帶時區意義，單純加 8 小時)"""
-    return datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+    return datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=8)
 
 
 def _parse_date_str(s: str) -> Optional[str]:
