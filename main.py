@@ -31,8 +31,11 @@ async def query_data(date: str = Query(..., description="赛事日期 YYYY-MM-DD
     """
     根据日期请求远程 API，并返回解析后的赛果数据
     """
-    # 从环境变量读取基础 URL，如果未设置则使用默认值
-    base_url = os.getenv("J18_HISTORY_RESULT_URL", "https://api.j18.hk/calculate/v1/historyResult")
+    # 强制从环境变量读取基础 URL，不在程式码中留下任何预设网址
+    base_url = os.getenv("J18_HISTORY_RESULT_URL")
+    if not base_url:
+        return {"code": -1, "msg": "系统设定错误：未配置数据来源入口 (J18_HISTORY_RESULT_URL)", "data": []}
+        
     url = f"{base_url}?date={date}"
     try:
         # 发送请求获取源数据
@@ -58,7 +61,10 @@ async def sync_data_to_db(date: str = Query(..., description="赛事日期 YYYY-
     """
     【手动触发入口】从远程 API 获取指定日期的赛事资料，解析后存入数据库
     """
-    base_url = os.getenv("J18_HISTORY_RESULT_URL", "https://api.j18.hk/calculate/v1/historyResult")
+    base_url = os.getenv("J18_HISTORY_RESULT_URL")
+    if not base_url:
+        return {"code": -1, "msg": "系统设定错误：未配置数据来源入口 (J18_HISTORY_RESULT_URL)", "data": None}
+        
     url = f"{base_url}?date={date}"
     try:
         # 1. 获取资料
