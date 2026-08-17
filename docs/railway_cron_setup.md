@@ -12,19 +12,19 @@
 在 Settings 頁面中，找到 **Cron Jobs** (定時任務) 區塊。
 點擊 **+ Add Cron Job** (新增定時任務) 按鈕。
 
-### Step 3: 新增第一個任務 (每日 01:00)
-根據您的需求，每天香港時間 01:00 嘗試抓取當天的資料。
+### Step 3: 新增第一個任務 (每日 09:00)
+根據您的需求，每天香港時間 09:00 嘗試抓取當天的資料（避開跨日時區換算問題）。
 **注意**：Railway Cron 的排程時區預設為 **UTC**。因此：
-- 香港時間 (UTC+8) **01:00** = UTC **17:00** (前一天)
+- 香港時間 (UTC+8) **09:00** = UTC **01:00** (同一天)
 
 填寫以下資訊：
 - **Schedule (排程)**：點擊切換到 `Standard CRON syntax` (標準 Cron 語法)
-- **Syntax**：`0 17 * * *` (代表每日 17:00 UTC)
+- **Syntax**：`0 1 * * *` (代表每日 01:00 UTC)
 - **Start Command (啟動指令)**：
   ```bash
   python scripts/daily_sync.py
   ```
-- **Name (名稱)**：Daily Sync 01:00 (HKT)
+- **Name (名稱)**：Daily Sync 09:00 (HKT)
 - 點擊 **Add Cron** 或 **Save** 儲存。
 
 ### Step 4: 新增第二個任務 (每日 23:00)
