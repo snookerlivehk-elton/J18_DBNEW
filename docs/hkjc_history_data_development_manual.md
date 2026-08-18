@@ -1,0 +1,803 @@
+# HKJC 歷史補充資料開發手冊
+
+本手冊用於定義 HKJC 歷史賽事補充資料的抓取、正規化、去重、入庫、回填、驗證與風險管理方案，作為後續 scraper、parser、schema、回填腳本與排程設計的正式依據。
+
+## 目錄
+
+1. 文件目的
+2. 正式需求定義
+3. 現有專案與資料庫概況
+4. 整體資料流程
+5. HKJC 資料來源規格
+6. 核心資料模型設計
+7. 唯一鍵與去重策略
+8. 抓取策略與任務拆分
+9. Parser 與正規化規範
+10. 入庫策略與資料一致性
+11. 回填策略
+12. 驗證與 QA 流程
+13. 錯誤處理與風險管理
+14. 分階段開發計劃
+15. 後續擴充方向
+附錄 A. HKJC 來源頁面規格表
+附錄 B. 建議資料表與欄位字典
+附錄 C. 去重與回填 SOP
+
+## 1. 文件目的
+
+- 本手冊用於定義 HKJC 歷史賽事補充資料的抓取、正規化、去重與入庫方案。
+- 本手冊優先作為開發依據與驗證依據，而不是程式實作文件。
+- 所有後續 scraper、parser、schema 與回填腳本，均以本手冊為準。
+
+## 2. 正式需求定義
+
+正式需求表述如下：
+
+> 系統以現有賽果資料庫為起點，透過馬匹歷史出賽紀錄整理待抓場次清單；對每一場歷史賽事，抓取該場的場次完成時間與整體分段時間，以及該場全部馬匹的分段時間、分段排名、競賽事件報告及沿路走勢評述，並以唯一鍵去重後寫入資料庫。
+
+核心原則如下：
+
+- 以現有資料庫為起點。
+- 以場次為抓取單位。
+- 只要打開某場，就整場入庫。
+- 所有資料均以唯一鍵去重。
+- 分段資料固定 6 段輸出，不足段數補 `null`。
+
+## 3. 現有專案與資料庫概況
+
+專案目前已有：
+
+- FastAPI API 入口。
+- SQLAlchemy ORM 與 CRUD。
+- `historyResult` 主資料解析與入庫流程。
+- 部分爬蟲與排程腳本。
+
+現有主表：
+
+- `races_v2`
+- `horses_v2`
+- `kv_store_v2`
+
+本次需求不應直接破壞既有主流程，而應以「擴充資料層」方式接入。
+
+## 4. 整體資料流程
+
+標準流程如下：
+
+1. 由現有 `horses_v2` 或相關主表取得已知馬匹。
+2. 抓取每匹馬的歷史出賽紀錄。
+3. 整理成待抓場次清單。
+4. 按場次抓取 HKJC 補充頁面。
+5. 解析為場次層資料與逐馬層資料。
+6. 用唯一鍵去重後寫入資料庫。
+7. 記錄抓取狀態、失敗原因與回填進度。
+
+資料流程圖文字版：
+
+- 現有賽果資料庫
+- 取得已知馬匹
+- 抓馬匹歷史出賽
+- 整理待抓場次清單
+- 按場次抓 HKJC 頁面
+- 解析為場次層 / 逐馬層資料
+- 按唯一鍵去重
+- 寫入資料庫
+- 記錄抓取狀態與缺漏
+
+## 5. HKJC 資料來源規格
+
+本系統目前已確認以下主要來源：
+
+### 5.1 競賽事件報告
+
+- 路徑：`/zh-hk/local/information/racereportfull`
+- 正確格式：`https://racing.hkjc.com/zh-hk/local/information/racereportfull?Date=YYYY/MM/DD`
+- 粒度：逐賽日頁面，頁內包含該日全部場次
+- 日期參數：`Date`
+- 日期格式：`YYYY/MM/DD`
+- 場次參數：無，整頁返回當日所有場次
+- 內容層次：賽日層 -> 場次層 -> 逐馬層
+
+### 5.2 沿路走勢評述
+
+- 路徑：`/zh-hk/local/information/corunning`
+- 正確格式：`https://racing.hkjc.com/zh-hk/local/information/corunning?Date=YYYYMMDD&raceno=N`
+- 粒度：逐場頁面
+- 日期參數：`Date`
+- 日期格式：`YYYYMMDD`
+- 場次參數：`raceno`
+- 場次格式：整數，從 `1` 開始
+- 內容層次：場次層 -> 逐馬層
+
+### 5.3 分段時間及位置
+
+- 路徑：`/zh-hk/local/information/displaysectionaltime`
+- 正確格式：`https://racing.hkjc.com/zh-hk/local/information/displaysectionaltime?racedate=DD/MM/YYYY&RaceNo=N`
+- 粒度：逐場頁面
+- 日期參數：`racedate`
+- 日期格式：`DD/MM/YYYY`
+- 場次參數：`RaceNo`
+- 場次格式：整數，從 `1` 開始
+- 內容層次：場次層 -> 逐馬層 -> 分段點層
+
+### 5.4 統一規則
+
+- `競賽事件報告` 以賽日為單位抓取。
+- `沿路走勢評述` 以場次為單位抓取。
+- `分段時間及位置` 以場次為單位抓取。
+- 所有來源最終需對齊到：`race_date`、`race_no`、`horse_id`。
+- 入庫時一律正規化成資料庫標準日期格式。
+
+## 6. 核心資料模型設計
+
+建議把資料拆為兩大類：
+
+- 場次層資料
+- 逐馬層資料
+
+建議資料表如下：
+
+- `horse_race_history`
+- `race_sectional_summary`
+- `horse_sectional_detail`
+- `horse_incident_report`
+- `horse_running_comment`
+- `race_fetch_registry`
+
+設計原則如下：
+
+- 場次層與逐馬層分開存，不把所有內容硬塞進 `horses_v2`。
+- 分段資料固定 6 段輸出。
+- 所有來源資料保留 `source_url` 與 `scraped_at`。
+- 預設去重策略為「已存在即跳過」。
+- `無特別報告。` 視為有效資料，不是空值。
+
+## 7. 唯一鍵與去重策略
+
+### 7.1 章節目的
+
+- 定義唯一識別方式、資料去重規則、重複寫入處理方式，以及資料完整性判定基準。
+
+### 7.2 核心原則
+
+- 所有資料寫入前必須先做唯一鍵判斷。
+- 去重以業務主鍵為基礎，不以內部流水號作判斷。
+- 已存在資料預設跳過，不重複寫入。
+- 同一場的不同來源分開判斷完整性，不混為單一完成狀態。
+- `null` 只表示來源未提供或該欄位不適用，不代表抓取失敗。
+- 抓取失敗、解析失敗、寫入異常，必須由獨立狀態欄位或抓取紀錄表表示。
+
+### 7.3 各資料表唯一鍵
+
+- `horse_race_history`：`horse_id + race_date + race_no`
+- `race_sectional_summary`：`race_date + race_no`
+- `horse_sectional_detail`：`race_date + race_no + horse_id`
+- `horse_incident_report`：`race_date + race_no + horse_id`
+- `horse_running_comment`：`race_date + race_no + horse_id`
+- `race_fetch_registry`：`race_date + race_no + source_type`
+
+### 7.4 去重行為規則
+
+- 唯一鍵不存在時，允許新增。
+- 唯一鍵已存在時，預設跳過，不重寫。
+- 重跑同一場次時，不得因重跑而重複新增資料。
+- 若同一場僅某個來源未完成時，只補抓該來源，不影響其他已完成來源。
+
+### 7.5 第一版更新策略
+
+- 第一版不以內容變更為覆寫條件。
+- 即使重新抓取時發現內容可能更新，只要唯一鍵已存在，仍預設跳過。
+- 後續如需支援版本更新，再加入 `content_hash`、`data_version`、`updated_at` 等欄位。
+
+## 8. 抓取策略與任務拆分
+
+### 8.1 核心策略
+
+本系統採用 `以馬找場、以場抓頁、整場入庫` 的策略。
+
+### 8.2 抓取單位
+
+- 邏輯起點單位：馬匹
+- 任務執行單位：場次
+- 資料入庫單位：
+  - 場次層資料為一場一筆
+  - 逐馬層資料為一場內每匹馬一筆
+
+### 8.3 系統總流程
+
+1. 從現有資料庫取得待處理馬匹
+2. 抓取馬匹歷史出賽紀錄
+3. 整理待抓場次清單
+4. 對場次清單做場次去重
+5. 逐場抓取 HKJC 補充來源頁
+6. 解析為場次層與逐馬層資料
+7. 依唯一鍵做寫入前去重
+8. 寫入資料庫
+9. 更新抓取狀態與缺漏紀錄
+10. 對失敗或部分成功場次保留重試能力
+
+### 8.4 任務拆分
+
+- 任務 A：馬匹來源整理
+- 任務 B：馬匹歷史抓取
+- 任務 C：待抓場次生成
+- 任務 D：場次補充頁抓取
+- 任務 E：解析與正規化
+- 任務 F：入庫與狀態更新
+
+### 8.5 執行順序建議
+
+- 第一版固定順序：`A -> B -> C -> D -> E -> F`
+- 場次補充頁抓取內部順序：`incident_report -> running_comment -> sectional`
+
+### 8.6 並行策略
+
+- 第一版建議採「場次級可並行，場內來源可序列」。
+- 多個場次可以並行抓。
+- 同一場內的 3 個來源先按固定順序抓。
+
+## 9. Parser 與正規化規範
+
+### 9.1 核心原則
+
+- 先解析，後入庫。
+- 所有唯一鍵欄位必須先正規化，再進行去重。
+- 場次層資料與逐馬層資料分開解析。
+- 固定 6 段輸出，不足段數補 `null`。
+- 來源未提供的欄位可為 `null`，但抓取失敗不得以 `null` 替代。
+
+### 9.2 Parser 對應
+
+- `IncidentReportParser` 對應 `racereportfull`
+- `RunningCommentParser` 對應 `corunning`
+- `SectionalTimeParser` 對應 `displaysectionaltime`
+
+### 9.3 日期正規化規則
+
+- `racereportfull`：來源格式 `YYYY/MM/DD`
+- `corunning`：來源格式 `YYYYMMDD`
+- `displaysectionaltime`：來源格式 `DD/MM/YYYY`
+- 正規化後一律輸出資料庫標準 `race_date`
+
+### 9.4 場次欄位規範
+
+- `race_no` 一律轉整數
+- `race_index` 可保留原始識別資訊，但不作唯一鍵主體
+- `distance_m` 一律轉整數
+- `class_name`、`rating_range`、`race_name`、`racecourse`、`surface`、`course_code`、`going` 保留原文或標準固定值
+
+### 9.5 馬匹識別規範
+
+- `horse_id` 為逐馬層主識別欄位
+- `horse_code` 作輔助欄位
+- `horse_name` 保留原文
+- `horse_no` 一律轉整數
+- 若無法抽到 `horse_id`，可暫以 `horse_name + horse_code` 作輔助識別，但須標記為非理想匹配
+
+### 9.6 文字欄位規範
+
+- `incident_report_text` 保留全文原文
+- `running_comment_text` 保留全文原文
+- `無特別報告。` 視為有效內容
+
+### 9.7 分段資料規範
+
+- 所有分段資料固定輸出 6 段欄位
+- 若來源實際段數少於 6 段，不存在的欄位一律補 `null`
+- 同時必須保存 `section_count`
+
+### 9.8 Parser 標準輸出
+
+每個 parser 應產出：
+
+- `source_type`
+- `source_url`
+- `race_date`
+- `race_no`
+- `race_level_data`
+- `horse_level_data[]`
+- `parse_warning[]`
+- `section_count`，如適用
+
+## 10. 入庫策略與資料一致性
+
+### 10.1 核心原則
+
+- 所有來源資料必須先解析與正規化，再進行入庫。
+- 所有寫入必須先依唯一鍵去重。
+- 入庫以來源為單位判斷成功與否，不以整場一次性全有或全無處理。
+- 任一來源寫入失敗，不得影響其他已成功來源。
+- 所有寫入結果必須同步更新抓取狀態紀錄。
+
+### 10.2 入庫分層
+
+- 索引層：`horse_race_history`
+- 場次層：`race_sectional_summary`
+- 逐馬層：`horse_sectional_detail`、`horse_incident_report`、`horse_running_comment`
+- 狀態層：`race_fetch_registry`
+
+### 10.3 標準入庫順序
+
+1. `horse_race_history`
+2. `race_sectional_summary`
+3. `horse_sectional_detail`
+4. `horse_incident_report`
+5. `horse_running_comment`
+6. `race_fetch_registry`
+
+### 10.4 狀態判定
+
+- `success`：來源頁成功取得、解析成功、筆數與預期基本一致
+- `partial`：來源頁可取得，但只有部分資料成功
+- `failed`：抓取、解析或寫入過程未形成可信結果
+
+### 10.5 一致性規則
+
+- 所有逐馬表中的 `race_date + race_no` 必須與對應場次一致
+- 同一場內逐馬資料的 `horse_id` 不應重複
+- `section_count` 與固定 6 段欄位補空規則必須一致
+- 若 `race_sectional_summary` 存在，則 `race_finish_time` 不可缺失
+
+## 11. 回填策略
+
+### 11.1 核心原則
+
+- 回填以場次為執行單位，不以單一馬匹為最終抓取單位。
+- 回填來源來自馬匹歷史出賽紀錄，而不是直接掃全站所有歷史賽事。
+- 已存在資料預設跳過，只補缺口。
+- 同一場的不同來源應獨立判斷是否需要補抓。
+- 回填流程必須可按單場、按賽日、按批次重跑。
+
+### 11.2 回填入口
+
+- 入口 A：按馬匹批次回填
+- 入口 B：按賽日回填
+- 入口 C：按單場回填
+
+### 11.3 標準回填主流程
+
+1. 取得回填入口範圍
+2. 整理出待抓場次清單
+3. 查詢 `race_fetch_registry`
+4. 判斷每場哪些來源尚未完成
+5. 只抓需要補抓的來源
+6. 解析與正規化
+7. 依唯一鍵去重後寫入
+8. 更新來源狀態
+9. 保留失敗與部分成功資訊供後續重試
+
+### 11.4 回填判斷邏輯
+
+視為不需回填的條件：
+
+- 有對應 `source_type`
+- `fetch_status = success`
+- 正式資料筆數合理
+- 與預期馬匹數一致或可接受
+
+視為需回填的條件：
+
+- 無任何 registry
+- `fetch_status = failed`
+- `fetch_status = partial`
+- 筆數低於預期
+- 關鍵欄位大量缺失
+
+### 11.5 重跑策略
+
+- 第一版允許重跑，但重跑不等於覆寫
+- 已存在資料跳過
+- 缺失資料補寫
+- `failed` 來源重抓
+- `partial` 來源補齊後升級為 `success`
+
+## 12. 驗證與 QA 流程
+
+### 12.1 核心原則
+
+- 每個來源都必須獨立驗證，不可只驗整場最終結果。
+- 驗證必須分層進行，不能只做資料庫最終筆數檢查。
+- 去重成功不代表資料完整，完整仍需額外驗證。
+- QA 必須同時涵蓋自動驗證與人工抽樣驗證。
+
+### 12.2 驗證分層
+
+- 第一層：來源頁驗證
+- 第二層：Parser 驗證
+- 第三層：入庫驗證
+- 第四層：完整性驗證
+
+### 12.3 來源頁驗證規則
+
+每次抓取後至少檢查：
+
+- `page_url` 是否符合預期來源
+- `race_date` 是否與目標一致
+- `race_no` 是否與目標一致
+- 頁面主標題是否符合來源類型
+- 是否存在主要資料表格或主要內容區塊
+
+### 12.4 Parser 驗證規則
+
+每個 parser 完成後至少驗證：
+
+- `race_date` 是否成功正規化
+- `race_no` 是否為整數
+- `horse_id` 是否成功抽取
+- `horse_name` 是否非空
+- 逐馬資料是否有筆數
+- 場次層資料是否存在
+- 固定 6 段欄位是否補齊
+- `section_count` 是否合理
+
+### 12.5 完整性驗證規則
+
+每個來源都應與預期馬匹數交叉驗證：
+
+- `expected_horse_count`
+- `actual_incident_report_count`
+- `actual_running_comment_count`
+- `actual_sectional_detail_count`
+
+### 12.6 固定 6 段輸出的 QA 規則
+
+每筆分段資料都必須驗證：
+
+- `section_count` 是否介於 1 到 6
+- 所有實際存在的段數欄位應有值
+- 超出 `section_count` 的段數欄位應為 `null`
+- 場次層與逐馬層必須遵守同一補空規則
+
+## 13. 錯誤處理與風險管理
+
+### 13.1 核心原則
+
+- 錯誤必須被記錄，不可被靜默吞掉。
+- 來源異常、解析異常、入庫異常必須分開處理。
+- 單場失敗不得中斷整批任務。
+- 單一來源失敗不得覆蓋其他已成功來源。
+- `partial` 與 `failed` 必須保留重試能力。
+- 長期失敗或異常重複出現時，必須升級為人工檢查事項。
+
+### 13.2 錯誤分類
+
+- 類別 A：參數與請求錯誤
+- 類別 B：來源頁錯誤
+- 類別 C：Parser 錯誤
+- 類別 D：資料一致性錯誤
+- 類別 E：入庫與流程錯誤
+
+### 13.3 錯誤處理原則
+
+- 參數錯誤導致抓錯頁時，直接標記為 `failed`
+- 來源頁結構改版時，優先記錄 `page_structure_changed`
+- Parser 若只能產生部分可信資料，標記 `partial`
+- 若無法形成可信結構，標記 `failed`
+- 第一版以保留既有有效資料與補抓缺漏為原則，不以整場刪除重建作為預設處理策略
+
+### 13.4 建議保留的錯誤欄位
+
+- `fetch_status`
+- `last_error`
+- `retry_count`
+- `parse_warning`
+- `expected_horse_count`
+- `record_count`
+- `skipped_existing_count`
+- `last_fetched_at`
+
+### 13.5 建議錯誤碼
+
+- `parameter_error`
+- `page_not_found`
+- `page_structure_changed`
+- `parser_error`
+- `missing_main_table`
+- `missing_horse_id`
+- `record_count_mismatch`
+- `db_write_error`
+- `registry_update_error`
+
+## 14. 分階段開發計劃
+
+本章待後續補完。現階段建議的初步階段如下：
+
+- Phase 1：完成開發手冊、資料模型、唯一鍵規格
+- Phase 2：完成馬匹歷史出賽紀錄抓取方案
+- Phase 3：完成待抓場次清單生成與去重
+- Phase 4：完成競賽事件報告抓取方案
+- Phase 5：完成沿路走勢評述抓取方案
+- Phase 6：完成分段時間與完成時間抓取方案
+- Phase 7：完成入庫、回填與 QA
+- Phase 8：完成排程、自動補抓與監控
+
+## 15. 後續擴充方向
+
+後續可擴充方向如下：
+
+- 研訊摘要
+- 獸醫報告相關標記
+- 馬匹裝備變更
+- 同場更多賽事分析資料
+- 抓取完成率報表
+- 缺漏場次追蹤
+- 手動重抓工具
+
+## 附錄 A：HKJC 來源頁面規格表
+
+### A1. 競賽事件報告
+
+- 用途：取得某一賽日、每一場、全場所有馬匹的競賽事件報告文字
+- 路徑：`/zh-hk/local/information/racereportfull`
+- 格式：`https://racing.hkjc.com/zh-hk/local/information/racereportfull?Date=YYYY/MM/DD`
+- 粒度：逐賽日頁面，頁內包含該日全部場次
+- 主要欄位：
+  - `race_date`
+  - `race_no`
+  - `race_index`
+  - `race_name`
+  - `class`
+  - `distance`
+  - `placing`
+  - `horse_no`
+  - `horse_id`
+  - `horse_name`
+  - `draw`
+  - `jockey_id`
+  - `jockey_name`
+  - `incident_report_text`
+
+### A2. 沿路走勢評述
+
+- 用途：取得某一賽日某一場、全場所有馬匹的走勢評述
+- 路徑：`/zh-hk/local/information/corunning`
+- 格式：`https://racing.hkjc.com/zh-hk/local/information/corunning?Date=YYYYMMDD&raceno=N`
+- 粒度：逐場頁面
+- 主要欄位：
+  - `race_date`
+  - `race_no`
+  - `race_index`
+  - `race_name`
+  - `rating_range`
+  - `distance`
+  - `racecourse`
+  - `going`
+  - `placing`
+  - `horse_no`
+  - `horse_id`
+  - `horse_name`
+  - `jockey_name`
+  - `gear`
+  - `running_comment_text`
+
+### A3. 分段時間及位置
+
+- 用途：取得某一賽日某一場的場次完成時間、整體分段時間，以及全場所有馬匹的分段時間、分段排名或位置資訊
+- 路徑：`/zh-hk/local/information/displaysectionaltime`
+- 格式：`https://racing.hkjc.com/zh-hk/local/information/displaysectionaltime?racedate=DD/MM/YYYY&RaceNo=N`
+- 粒度：逐場頁面
+- 主要欄位：
+  - `race_date`
+  - `race_no`
+  - `class`
+  - `distance`
+  - `rating_range`
+  - `surface`
+  - `course`
+  - `going`
+  - `race_name`
+  - `race_finish_time`
+  - `horse_no`
+  - `horse_id`
+  - `horse_name`
+  - `finish_position`
+  - `finish_time`
+  - `section_position`
+  - `distance_from_leader`
+  - `horse_sectional_times`
+  - `sub_section_times`
+
+## 附錄 B：建議資料表與欄位字典
+
+### B1. `horse_race_history`
+
+- 用途：保存馬匹歷史出賽索引，作為待抓場次清單的來源
+- 唯一鍵：`horse_id + race_date + race_no`
+
+建議欄位：
+
+- `id`
+- `horse_id`
+- `horse_code`
+- `horse_name`
+- `race_date`
+- `race_no`
+- `racecourse`
+- `race_name`
+- `distance_m`
+- `class_name`
+- `placing`
+- `draw`
+- `jockey_name`
+- `trainer_name`
+- `source_url`
+- `scraped_at`
+
+### B2. `race_sectional_summary`
+
+- 用途：保存某一場的場次完成時間與整體分段時間
+- 唯一鍵：`race_date + race_no`
+
+建議欄位：
+
+- `id`
+- `race_date`
+- `race_no`
+- `race_index`
+- `race_name`
+- `racecourse`
+- `surface`
+- `course_code`
+- `going`
+- `class_name`
+- `distance_m`
+- `rating_range`
+- `section_count`
+- `race_finish_time`
+- `race_cumulative_time_1` 至 `race_cumulative_time_6`
+- `race_section_time_1` 至 `race_section_time_6`
+- `source_url`
+- `scraped_at`
+
+規則：
+
+- 若某場只有 5 段，則第 6 段相關欄位一律填 `null`
+
+### B3. `horse_sectional_detail`
+
+- 用途：保存某一場每匹馬的完成時間、各分段時間、分段排名或位置資料
+- 唯一鍵：`race_date + race_no + horse_id`
+
+建議欄位：
+
+- `id`
+- `race_date`
+- `race_no`
+- `horse_id`
+- `horse_code`
+- `horse_name`
+- `horse_no`
+- `finish_position`
+- `finish_time`
+- `section_count`
+- `horse_position_1` 至 `horse_position_6`
+- `horse_distance_from_leader_1` 至 `horse_distance_from_leader_6`
+- `horse_section_time_1` 至 `horse_section_time_6`
+- `horse_section_rank_1` 至 `horse_section_rank_6`
+- `horse_split_time_1a` 至 `horse_split_time_6b`
+- `source_url`
+- `scraped_at`
+
+規則：
+
+- 若頁面未直接提供 `分段排名`，第一版先填 `null`
+- 固定 6 段輸出，不足段數一律補 `null`
+
+### B4. `horse_incident_report`
+
+- 用途：保存某一場每匹馬的競賽事件報告
+- 唯一鍵：`race_date + race_no + horse_id`
+
+建議欄位：
+
+- `id`
+- `race_date`
+- `race_no`
+- `race_index`
+- `horse_id`
+- `horse_code`
+- `horse_name`
+- `horse_no`
+- `placing`
+- `draw`
+- `jockey_id`
+- `jockey_name`
+- `incident_report_text`
+- `source_url`
+- `scraped_at`
+
+### B5. `horse_running_comment`
+
+- 用途：保存某一場每匹馬的沿路走勢評述
+- 唯一鍵：`race_date + race_no + horse_id`
+
+建議欄位：
+
+- `id`
+- `race_date`
+- `race_no`
+- `race_index`
+- `horse_id`
+- `horse_code`
+- `horse_name`
+- `horse_no`
+- `placing`
+- `jockey_name`
+- `gear`
+- `running_comment_text`
+- `source_url`
+- `scraped_at`
+
+### B6. `race_fetch_registry`
+
+- 用途：記錄某一場哪些來源已抓取、是否成功、是否可重試
+- 唯一鍵：`race_date + race_no + source_type`
+
+建議欄位：
+
+- `id`
+- `race_date`
+- `race_no`
+- `source_type`
+- `fetch_status`
+- `record_count`
+- `content_hash`
+- `source_url`
+- `last_error`
+- `first_fetched_at`
+- `last_fetched_at`
+- `expected_horse_count`
+- `retry_count`
+- `parse_warning`
+
+## 附錄 C：去重與回填 SOP
+
+### C1. 目的
+
+- 規範 HKJC 歷史補充資料的去重、補抓、回填與重試流程。
+
+### C2. 核心原則
+
+- 以場次為抓取單位，不以單一馬匹為抓取單位。
+- 只要定位到某場，即抓取並保存該場全部馬匹資料。
+- 所有寫入都必須先做唯一鍵檢查。
+- 已存在資料預設跳過，不重複儲存。
+- 抓取失敗、頁面缺漏、解析異常，必須記錄，不可用 `null` 假裝成功。
+- 場次層資料與逐馬層資料要分開判斷是否完整。
+
+### C3. 去重標準
+
+- `horse_race_history`：`horse_id + race_date + race_no`
+- `race_sectional_summary`：`race_date + race_no`
+- `horse_sectional_detail`：`race_date + race_no + horse_id`
+- `horse_incident_report`：`race_date + race_no + horse_id`
+- `horse_running_comment`：`race_date + race_no + horse_id`
+- `race_fetch_registry`：`race_date + race_no + source_type`
+
+### C4. 回填流程總則
+
+1. 從現有賽果資料與馬匹歷史資料整理待抓場次清單
+2. 對待抓場次逐場檢查 `race_fetch_registry`
+3. 判斷哪些來源尚未抓取或抓取失敗
+4. 只針對缺失來源重新抓取
+5. 解析後逐表做唯一鍵去重
+6. 寫入成功後更新抓取狀態
+7. 保留失敗紀錄供後續重試
+
+### C5. 狀態定義
+
+- `pending`
+- `success`
+- `failed`
+- `partial`
+
+### C6. 部分成功原則
+
+- 第一版系統應允許部分成功資料落地。
+- 若僅部分馬匹資料成功，保留成功資料，將來源標記為 `partial`，留待後續重試補齊。
+
+### C7. `null` 與失敗的區分
+
+- `null` 僅表示該段不存在、該頁未提供欄位、或該欄位確實為空
+- `null` 不表示頁面抓不到、parser 壞掉、寫入失敗或內容不完整
+- 流程異常必須記錄於 `race_fetch_registry.fetch_status` 與 `race_fetch_registry.last_error`
