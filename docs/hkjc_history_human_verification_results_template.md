@@ -13,12 +13,12 @@
 
 ## 1. 文件狀態
 
-- 文件版本：
-- 最後更新日期：
-- 填寫人：
+- 文件版本：`v1.0`
+- 最後更新日期：`2026-08-18`
+- 填寫人：使用者與 Trae AI 對話整理
 - 狀態：
   - [ ] 草稿
-  - [ ] 已人工確認，可交給 AI
+  - [x] 已人工確認，可交給 AI
 
 ---
 
@@ -32,7 +32,7 @@
 
 最終指令：
 
--
+- 請嚴格依 `docs/` 內 HKJC 歷史補充資料相關手冊、實作清單、任務 checklist 與本人工核實結果完成第一版開發；聚焦核心資料流與其必要 API/UI，僅作保守且不擴 scope 的便利性補強，不得覆寫既有正式資料。
 
 ---
 
@@ -40,8 +40,8 @@
 
 ### 3.1 是否只做第一版核心資料流
 
-- 最終結論：
-- 說明：
+- 最終結論：是
+- 說明：第一版聚焦核心資料流，包含馬匹歷史索引、場次任務生成、`incident_report`、`running_comment`、`sectional`、回填，以及支援主流程所必需的 API 與 UI；不接受偏離主線的大幅擴 scope。
 
 ### 3.2 第一版是否只新增，不覆寫
 
@@ -187,48 +187,50 @@
 
 ## 6. 黃金測試樣本
 
+備註：現階段先以已確認樣本作為第一批黃金樣本，足以支撐 AI 啟動第一版開發；其餘延伸樣本可後補，不作為目前交付阻塞條件。
+
 ### 6.1 馬匹歷史頁樣本
 
-請至少提供 2 筆。
+目前先使用已確認樣本；其他樣本後補。
 
 | 編號 | horse_id | URL | 說明 |
 |---|---|---|---|
 | 1 | `HK_2023_J080` | `https://racing.hkjc.com/zh-hk/local/information/otherhorse?horseid=HK_2023_J080` | 已確認可作為馬匹歷史頁樣本 |
-| 2 |  |  |  |
-| 3 |  |  |  |
+| 2 | 後補 | 後補 | 不阻塞目前 AI 交付 |
+| 3 | 後補 | 後補 | 不阻塞目前 AI 交付 |
 
 ### 6.2 競賽事件報告樣本
 
 | 編號 | race_date | race_no | URL | 說明 |
 |---|---|---|---|---|
 | 1 | `2026-07-12` | `1` | `https://racing.hkjc.com/zh-hk/local/information/racereportfull?Date=2026/07/12` | 已確認 incident report URL 格式；可作 2026-07-12 單日樣本 |
-| 2 |  |  |  |  |
-| 3 |  |  |  |  |
+| 2 | 後補 | 後補 | 後補 | 不阻塞目前 AI 交付 |
+| 3 | 後補 | 後補 | 後補 | 不阻塞目前 AI 交付 |
 
 ### 6.3 沿路走勢評述樣本
 
 | 編號 | race_date | race_no | URL | 說明 |
 |---|---|---|---|---|
 | 1 | `2026-07-12` | `1` | `https://racing.hkjc.com/zh-hk/local/information/corunning?Date=20260712&raceno=1` | 已確認 running comment 日期與場次格式 |
-| 2 |  |  |  |  |
-| 3 |  |  |  |  |
+| 2 | 後補 | 後補 | 後補 | 不阻塞目前 AI 交付 |
+| 3 | 後補 | 後補 | 後補 | 不阻塞目前 AI 交付 |
 
 ### 6.4 分段時間及位置樣本
 
 | 編號 | race_date | race_no | URL | 說明 |
 |---|---|---|---|---|
 | 1 | `2026-07-12` | `1` | `https://racing.hkjc.com/zh-hk/local/information/displaysectionaltime?racedate=12/07/2026&RaceNo=1` | 已確認 sectional 日期與場次格式 |
-| 2 |  |  |  |  |
-| 3 |  |  |  |  |
+| 2 | 後補 | 後補 | 後補 | 不阻塞目前 AI 交付 |
+| 3 | 後補 | 後補 | 後補 | 不阻塞目前 AI 交付 |
 
 ### 6.5 特殊樣本
 
-- 至少一場只有 5 段的樣本：
+- 至少一場只有 5 段的樣本：後補，不阻塞目前 AI 交付
 - 至少一場含 `無特別報告。` 的樣本：可優先從 `2026-07-12` 的 incident report 樣本中人工標記
-- 至少一場有特殊 incident report 描述的樣本：
-- 至少一場有 `partial` 風險的樣本：
+- 至少一場有特殊 incident report 描述的樣本：後補，不阻塞目前 AI 交付
+- 至少一場有 `partial` 風險的樣本：後補，不阻塞目前 AI 交付
 - 至少一匹歷史頁筆數很多的馬：`HK_2023_J080` 可作第一批觀察樣本，後續可再補更長歷史馬匹
-- 至少一場含特殊名次或異常欄位的樣本：
+- 至少一場含特殊名次或異常欄位的樣本：後補，不阻塞目前 AI 交付
 
 ---
 
@@ -285,21 +287,21 @@
 
 ### 9.1 是否已具備交付 AI 的條件
 
-- [ ] 是
+- [x] 是
 - [ ] 否
 
 ### 9.2 若答案是「否」，仍缺少哪些人工確認
 
-- 
+- 不適用；目前判定為已具備交付 AI 的條件。
 
 ### 9.3 若答案是「是」，建議一併提供給 AI 的文件
 
-- [ ] `docs/hkjc_history_data_development_manual.md`
-- [ ] `docs/hkjc_history_v1_implementation_checklist.md`
-- [ ] `docs/hkjc_history_v1_task_checklist.md`
-- [ ] `docs/hkjc_history_human_verification_checklist.md`
-- [ ] 本文件 `docs/hkjc_history_human_verification_results_template.md`
-- [ ] 黃金測試樣本與人工結論
+- [x] `docs/hkjc_history_data_development_manual.md`
+- [x] `docs/hkjc_history_v1_implementation_checklist.md`
+- [x] `docs/hkjc_history_v1_task_checklist.md`
+- [x] `docs/hkjc_history_human_verification_checklist.md`
+- [x] 本文件 `docs/hkjc_history_human_verification_results_template.md`
+- [x] 黃金測試樣本與人工結論
 
 ---
 
@@ -313,4 +315,4 @@
 
 最終摘要：
 
--
+- 請嚴格依 `docs/` 內 HKJC 歷史補充資料相關手冊、實作清單、任務 checklist 與本人工核實結果執行第一版開發；先完整打通馬匹歷史索引、場次任務生成、`incident_report`、`running_comment`、`sectional`、回填、UI 與服務 UI 的 API；第一版只抓香港本地正式賽事，分段排名先全部填 `null`，所有正式資料一律只新增不覆寫，不得刪除既有有效資料，不得以清庫或先刪後建方式處理 `partial / failed`，若遇未確認事項只能採最保守、最不破壞資料的方案繼續執行。
